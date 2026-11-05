@@ -1,0 +1,7 @@
+.env
+.env.*
+*.log
+config.inc.php
+*.htpasswd
+keys.json
+files/
