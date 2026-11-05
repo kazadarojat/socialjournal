@@ -1,0 +1,6 @@
+import {createServer} from 'node:http';
+import {readFile,stat} from 'node:fs/promises';
+import {resolve,sep,extname} from 'node:path';
+const base=resolve(import.meta.dirname,'dist');
+const types={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.pdf':'application/pdf','.docx':'application/vnd.openxmlformats-officedocument.wordprocessingml.document','.ris':'application/x-research-info-systems','.bib':'application/x-bibtex','.xml':'application/xml','.txt':'text/plain; charset=utf-8'};
+createServer(async(req,res)=>{try{const pathname=decodeURIComponent(new URL(req.url,'http://localhost').pathname);let file=resolve(base,'.'+pathname);if(file!==base&&!file.startsWith(base+sep)){res.writeHead(403).end();return;}if((await stat(file)).isDirectory())file=resolve(file,'index.html');const content=await readFile(file);res.writeHead(200,{'Content-Type':types[extname(file)]||'application/octet-stream','Cache-Control':'no-store'});res.end(content);}catch{res.writeHead(404).end('Not found');}}).listen(Number(process.env.JOURNAL_PREVIEW_PORT||4173),'127.0.0.1',()=>console.log('Local: http://127.0.0.1:'+(process.env.JOURNAL_PREVIEW_PORT||4173)));

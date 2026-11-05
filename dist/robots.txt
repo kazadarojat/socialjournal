@@ -1,0 +1,3 @@
+User-agent: *
+Disallow: /
+# Preparation site: enable indexing only after an approved public launch.

@@ -1,0 +1,9 @@
+.taste-skill/
+outputs/
+node_modules/
+.env
+.env.*
+!.env.example
+*.log
+public/
+.vercel/

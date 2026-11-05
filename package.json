@@ -1,0 +1,12 @@
+{
+  "name": "fronstellar-socialjournal",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "engines": {"node": ">=22"},
+  "scripts": {
+    "build": "node scripts/build-hosting.mjs",
+    "build:pages": "node scripts/build-hosting.mjs --pages",
+    "test": "node scripts/verify-site.mjs"
+  }
+}
