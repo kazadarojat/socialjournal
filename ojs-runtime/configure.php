@@ -61,16 +61,12 @@ foreach ($settings as $section => $pairs) { foreach ($pairs as $key => $value) {
 file_put_contents($configPath, $config, LOCK_EX); chmod($configPath, 0640); chown($configPath, 'www-data'); chgrp($configPath, 'www-data');
 $webConfig = '/var/www/html/config.inc.php';
 if (!is_link($webConfig)) { if (is_file($webConfig)) { unlink($webConfig); } symlink($configPath, $webConfig); }
-$public = '/var/www/html/public';
-if (!is_link($public)) {
-    // Preserve files bundled with the distribution before moving public uploads onto the volume.
-    $copy = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($public, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::SELF_FIRST);
-    foreach ($copy as $file) {
-        $destination = '/var/ojs/public/' . $copy->getSubPathName();
-        if ($file->isDir()) { if (!is_dir($destination)) { mkdir($destination, 0750, true); } }
-        elseif (!file_exists($destination)) { copy($file->getPathname(), $destination); }
-    }
-    rename($public, '/var/www/html/public.bundled'); symlink('/var/ojs/public', $public);
+// The image establishes the symlink at build time; never rename an image-layer directory at startup.
+$copy = new RecursiveIteratorIterator(new RecursiveDirectoryIterator('/opt/fronstellar/public.bundled', FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::SELF_FIRST);
+foreach ($copy as $file) {
+    $destination = '/var/ojs/public/' . $copy->getSubPathName();
+    if ($file->isDir()) { if (!is_dir($destination)) { mkdir($destination, 0750, true); } }
+    elseif (!file_exists($destination) && !copy($file->getPathname(), $destination)) { throw new RuntimeException('Cannot initialize persistent public files.'); }
 }
 $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator('/var/ojs', FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::SELF_FIRST);
 foreach ($iterator as $file) { chown($file->getPathname(), 'www-data'); chgrp($file->getPathname(), 'www-data'); }
@@ -86,4 +82,3 @@ $apache .= "Alias /healthz /opt/fronstellar/healthz\n<Location /healthz>\n AuthT
 file_put_contents('/opt/fronstellar/healthz', "OJS runtime ready\n");
 file_put_contents('/etc/apache2/conf-enabled/fronstellar.conf', $apache);
 echo "Fronstellar runtime configured; installer remains protected until initialization.\n";
-

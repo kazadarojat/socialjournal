@@ -11,12 +11,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       if ! php -r 'exit(extension_loaded($argv[1]) ? 0 : 1);' "$extension"; then missing="$missing $extension"; fi; \
     done \
  && if [ -n "$missing" ]; then docker-php-ext-install -j2 $missing; fi \
- && a2enmod rewrite headers setenvif \
+ && (a2dismod -f mpm_event mpm_worker || true) \
+ && a2enmod mpm_prefork rewrite headers setenvif \
  && rm -rf /var/lib/apt/lists/*
 RUN curl --fail --show-error --silent --location --retry 3 --proto '=https' \
       "https://pkp.sfu.ca/ojs/download/ojs-${OJS_VERSION}.tar.gz" -o /tmp/ojs.tar.gz \
  && echo "${OJS_SHA256}  /tmp/ojs.tar.gz" | sha256sum -c - \
  && tar -xzf /tmp/ojs.tar.gz --strip-components=1 -C /var/www/html \
+ && mkdir -p /opt/fronstellar \
+ && mv /var/www/html/public /opt/fronstellar/public.bundled \
+ && ln -s /var/ojs/public /var/www/html/public \
  && rm /tmp/ojs.tar.gz \
  && php -r 'foreach (["bcmath","curl","dom","fileinfo","ftp","gd","intl","mbstring","openssl","pdo_pgsql","simplexml","xml","xmlwriter","zip"] as $e) {if (!extension_loaded($e)) {fwrite(STDERR,"Missing PHP extension: $e\n"); exit(1);}}' \
  && chown -R www-data:www-data /var/www/html
