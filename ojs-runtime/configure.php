@@ -50,7 +50,9 @@ $settings = [
     'database' => ['driver' => iniValue($driver), 'host' => iniValue(requiredEnv('OJS_DB_HOST')), 'port' => iniValue(requiredEnv('OJS_DB_PORT')), 'name' => iniValue(requiredEnv('OJS_DB_NAME')), 'username' => iniValue(requiredEnv('OJS_DB_USER')), 'password' => iniValue(requiredEnv('OJS_DB_PASSWORD'))],
     'files' => ['files_dir' => '"/var/ojs/files"'],
     'i18n' => ['locale' => '"en"'],
-    'security' => ['force_ssl' => 'On', 'force_login_ssl' => 'On', 'salt' => iniValue($keys['salt']), 'api_key_secret' => iniValue($keys['api_key_secret'])]
+    'security' => ['force_ssl' => 'On', 'force_login_ssl' => 'On', 'salt' => iniValue($keys['salt']), 'api_key_secret' => iniValue($keys['api_key_secret'])],
+    'queues' => ['job_runner' => 'Off', 'process_jobs_at_task_scheduler' => 'On'],
+    'schedule' => ['task_runner' => 'Off']
 ];
 if (getenv('OJS_SMTP_HOST')) {
     $settings['email'] = ['default'=>'"smtp"', 'smtp_server'=>iniValue(requiredEnv('OJS_SMTP_HOST')), 'smtp_port'=>iniValue(requiredEnv('OJS_SMTP_PORT')), 'smtp_auth'=>iniValue(getenv('OJS_SMTP_AUTH') ?: 'tls'), 'smtp_username'=>iniValue(requiredEnv('OJS_SMTP_USER')), 'smtp_password'=>iniValue(requiredEnv('OJS_SMTP_PASSWORD'))];
@@ -84,3 +86,4 @@ $apache .= "Alias /healthz /opt/fronstellar/healthz\n<Location /healthz>\n AuthT
 file_put_contents('/opt/fronstellar/healthz', "OJS runtime ready\n");
 file_put_contents('/etc/apache2/conf-enabled/fronstellar.conf', $apache);
 echo "Fronstellar runtime configured; installer remains protected until initialization.\n";
+
