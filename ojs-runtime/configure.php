@@ -26,8 +26,12 @@ $parts = parse_url($url);
 if (($parts['scheme'] ?? '') !== 'https' || empty($parts['host']) || !empty($parts['user']) || !empty($parts['pass']) || !empty($parts['query']) || !empty($parts['fragment']) || !empty($parts['path'])) {
     throw new RuntimeException('OJS_BASE_URL must be an HTTPS origin without a path.');
 }
-$driver = requiredEnv('OJS_DB_DRIVER');
-if (!in_array($driver, ['mysqli', 'pgsql'], true)) { throw new RuntimeException('Unsupported database driver.'); }
+// OJS expects the installer driver name, while PHP uses pgsql for the extension.
+$driver = match (requiredEnv('OJS_DB_DRIVER')) {
+    'pgsql', 'postgres9' => 'postgres9',
+    'mysqli' => 'mysqli',
+    default => throw new RuntimeException('Unsupported database driver.'),
+};
 if (getenv('RAILWAY_VOLUME_MOUNT_PATH') !== '/var/ojs') { throw new RuntimeException('Mount the Railway persistent volume at /var/ojs before starting OJS.'); }
 foreach (['/var/ojs', '/var/ojs/files', '/var/ojs/public', '/var/ojs/config'] as $dir) {
     if (!is_dir($dir) && !mkdir($dir, 0750, true)) { throw new RuntimeException('Cannot create persistent directory.'); }
