@@ -31,7 +31,9 @@ if (!in_array($driver, ['mysqli', 'pgsql'], true)) { throw new RuntimeException(
 if (getenv('RAILWAY_VOLUME_MOUNT_PATH') !== '/var/ojs') { throw new RuntimeException('Mount the Railway persistent volume at /var/ojs before starting OJS.'); }
 foreach (['/var/ojs', '/var/ojs/files', '/var/ojs/public', '/var/ojs/config'] as $dir) {
     if (!is_dir($dir) && !mkdir($dir, 0750, true)) { throw new RuntimeException('Cannot create persistent directory.'); }
-    chown($dir, 'www-data'); chgrp($dir, 'www-data');
+    if (!chown($dir, 'www-data') || !chgrp($dir, 'www-data') || !chmod($dir, 0750)) {
+        throw new RuntimeException('Cannot set permissions on persistent OJS directories.');
+    }
 }
 // Railway must mount a real persistent volume at /var/ojs before this service starts.
 $configPath = '/var/ojs/config/config.inc.php';
@@ -58,9 +60,26 @@ if (getenv('OJS_SMTP_HOST')) {
     $settings['email'] = ['default'=>'"smtp"', 'smtp_server'=>iniValue(requiredEnv('OJS_SMTP_HOST')), 'smtp_port'=>iniValue(requiredEnv('OJS_SMTP_PORT')), 'smtp_auth'=>iniValue(getenv('OJS_SMTP_AUTH') ?: 'tls'), 'smtp_username'=>iniValue(requiredEnv('OJS_SMTP_USER')), 'smtp_password'=>iniValue(requiredEnv('OJS_SMTP_PASSWORD'))];
 }
 foreach ($settings as $section => $pairs) { foreach ($pairs as $key => $value) { $config = setIni($config, $section, $key, $value); } }
-file_put_contents($configPath, $config, LOCK_EX); chmod($configPath, 0640); chown($configPath, 'www-data'); chgrp($configPath, 'www-data');
+if (file_put_contents($configPath, $config, LOCK_EX) !== strlen($config)
+    || !chmod($configPath, 0640) || !chown($configPath, 'www-data') || !chgrp($configPath, 'www-data')) {
+    throw new RuntimeException('Cannot write persistent OJS configuration.');
+}
 $webConfig = '/var/www/html/config.inc.php';
-if (!is_link($webConfig)) { if (is_file($webConfig)) { unlink($webConfig); } symlink($configPath, $webConfig); }
+if (!is_link($webConfig) || readlink($webConfig) !== $configPath) {
+    if ((is_link($webConfig) || file_exists($webConfig)) && !unlink($webConfig)) {
+        throw new RuntimeException('Cannot replace the bundled OJS configuration.');
+    }
+    if (!symlink($configPath, $webConfig)) {
+        throw new RuntimeException('Cannot link to persistent OJS configuration.');
+    }
+}
+clearstatcache(true);
+$checkConfig = 'require "/var/www/html/lib/pkp/classes/config/ConfigParser.php"; '
+    . 'exit(is_array(\\PKP\\config\\ConfigParser::readConfig($argv[1])) && is_writable($argv[1]) ? 0 : 1);';
+passthru('runuser -u www-data -- /usr/local/bin/php -r ' . escapeshellarg($checkConfig) . ' ' . escapeshellarg($webConfig), $checkStatus);
+if ($checkStatus !== 0) {
+    throw new RuntimeException('The web server user cannot read or update the OJS configuration.');
+}
 // The image establishes the symlink at build time; never rename an image-layer directory at startup.
 $copy = new RecursiveIteratorIterator(new RecursiveDirectoryIterator('/opt/fronstellar/public.bundled', FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::SELF_FIRST);
 foreach ($copy as $file) {
@@ -78,6 +97,7 @@ if (!$installed || getenv('OJS_PRIVATE_PREVIEW') !== 'false') {
     chmod('/var/ojs/config/setup.htpasswd', 0640); chown('/var/ojs/config/setup.htpasswd', 'www-data'); chgrp('/var/ojs/config/setup.htpasswd', 'www-data');
     $apache .= "<Location />\n AuthType Basic\n AuthName \"Fronstellar OJS setup\"\n AuthUserFile /var/ojs/config/setup.htpasswd\n Require valid-user\n</Location>\n";
 }
+$apache .= "<LocationMatch \"(?i)(?:^|/)(?:config(?:\\.template)?\\.inc\\.php|[^/]+\\.(?:ini|log|sql))(?:/|$)\">\n Require all denied\n</LocationMatch>\n";
 $apache .= "Alias /healthz /opt/fronstellar/healthz\n<Location /healthz>\n AuthType None\n Require all granted\n</Location>\n<Directory /opt/fronstellar>\n Require all granted\n</Directory>\n";
 file_put_contents('/opt/fronstellar/healthz', "OJS runtime ready\n");
 chmod('/opt/fronstellar/healthz', 0644);
