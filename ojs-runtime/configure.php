@@ -80,5 +80,7 @@ if (!$installed || getenv('OJS_PRIVATE_PREVIEW') !== 'false') {
 }
 $apache .= "Alias /healthz /opt/fronstellar/healthz\n<Location /healthz>\n AuthType None\n Require all granted\n</Location>\n<Directory /opt/fronstellar>\n Require all granted\n</Directory>\n";
 file_put_contents('/opt/fronstellar/healthz', "OJS runtime ready\n");
+chmod('/opt/fronstellar/healthz', 0644);
 file_put_contents('/etc/apache2/conf-enabled/fronstellar.conf', $apache);
 echo "Fronstellar runtime configured; installer remains protected until initialization.\n";
+
