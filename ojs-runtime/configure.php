@@ -64,19 +64,24 @@ if (file_put_contents($configPath, $config, LOCK_EX) !== strlen($config)
     || !chmod($configPath, 0640) || !chown($configPath, 'www-data') || !chgrp($configPath, 'www-data')) {
     throw new RuntimeException('Cannot write persistent OJS configuration.');
 }
-$webConfig = '/var/www/html/config.inc.php';
-if (!is_link($webConfig) || readlink($webConfig) !== $configPath) {
-    if ((is_link($webConfig) || file_exists($webConfig)) && !unlink($webConfig)) {
-        throw new RuntimeException('Cannot replace the bundled OJS configuration.');
-    }
-    if (!symlink($configPath, $webConfig)) {
-        throw new RuntimeException('Cannot link to persistent OJS configuration.');
+// Point both the OJS bootstrap and installer at the persistent file directly.
+$bootstrapPath = '/var/www/html/lib/pkp/classes/config/Config.php';
+$bootstrap = file_get_contents($bootstrapPath);
+$bundledDefinition = 'define(\'CONFIG_FILE\', \PKP\core\Core::getBaseDir() . \'/config.inc.php\');';
+$persistentDefinition = 'define(\'CONFIG_FILE\', ' . var_export($configPath, true) . ');';
+if ($bootstrap === false) {
+    throw new RuntimeException('Cannot read the OJS configuration bootstrap.');
+}
+if (!str_contains($bootstrap, $persistentDefinition)) {
+    $bootstrap = str_replace($bundledDefinition, $persistentDefinition, $bootstrap, $replacements);
+    if ($replacements !== 1 || file_put_contents($bootstrapPath, $bootstrap, LOCK_EX) !== strlen($bootstrap)) {
+        throw new RuntimeException('Cannot configure the persistent OJS configuration path.');
     }
 }
 clearstatcache(true);
 $checkConfig = 'require "/var/www/html/lib/pkp/classes/config/ConfigParser.php"; '
     . 'exit(is_array(\\PKP\\config\\ConfigParser::readConfig($argv[1])) && is_writable($argv[1]) ? 0 : 1);';
-passthru('runuser -u www-data -- /usr/local/bin/php -r ' . escapeshellarg($checkConfig) . ' ' . escapeshellarg($webConfig), $checkStatus);
+passthru('runuser -u www-data -- /usr/local/bin/php -r ' . escapeshellarg($checkConfig) . ' ' . escapeshellarg($configPath), $checkStatus);
 if ($checkStatus !== 0) {
     throw new RuntimeException('The web server user cannot read or update the OJS configuration.');
 }
