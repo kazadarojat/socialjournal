@@ -98,7 +98,12 @@ foreach ($copy as $file) {
 }
 $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator('/var/ojs', FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::SELF_FIRST);
 foreach ($iterator as $file) { chown($file->getPathname(), 'www-data'); chgrp($file->getPathname(), 'www-data'); }
-$apache = "ServerName ".$parts['host']."\nServerTokens Prod\nServerSignature Off\nSetEnvIf X-Forwarded-Proto \"^https$\" HTTPS=on\n<Directory /var/www/html>\n Options -Indexes +FollowSymLinks\n AllowOverride None\n Require all granted\n</Directory>\n<FilesMatch \"^(config\\.inc\\.php|.*\\.(ini|log|sql))$\">\n Require all denied\n</FilesMatch>\n";
+// Resolve the client address only for requests arriving from the Railway ingress subnet.
+exec('a2enmod remoteip', $remoteIpOutput, $remoteIpStatus);
+if ($remoteIpStatus !== 0) {
+    throw new RuntimeException('Cannot enable Apache client IP handling.');
+}
+$apache = "RemoteIPHeader X-Real-IP\nRemoteIPTrustedProxy 100.64.0.0/24\nServerName ".$parts['host']."\nServerTokens Prod\nServerSignature Off\nSetEnvIf X-Forwarded-Proto \"^https$\" HTTPS=on\n<Directory /var/www/html>\n Options -Indexes +FollowSymLinks\n AllowOverride None\n Require all granted\n</Directory>\n<FilesMatch \"^(config\\.inc\\.php|.*\\.(ini|log|sql))$\">\n Require all denied\n</FilesMatch>\n";
 if (!$installed || getenv('OJS_PRIVATE_PREVIEW') !== 'false') {
     $setupPassword = requiredEnv('OJS_SETUP_PASSWORD');
     if (strlen($setupPassword) < 24) { throw new RuntimeException('Setup protection requires a password of at least 24 characters.'); }
