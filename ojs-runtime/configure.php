@@ -104,7 +104,8 @@ if ($remoteIpStatus !== 0) {
     throw new RuntimeException('Cannot enable Apache client IP handling.');
 }
 $apache = "RemoteIPHeader X-Real-IP\nRemoteIPTrustedProxy 100.64.0.0/24\nServerName ".$parts['host']."\nServerTokens Prod\nServerSignature Off\nSetEnvIf X-Forwarded-Proto \"^https$\" HTTPS=on\n<Directory /var/www/html>\n Options -Indexes +FollowSymLinks\n AllowOverride None\n Require all granted\n</Directory>\n<FilesMatch \"^(config\\.inc\\.php|.*\\.(ini|log|sql))$\">\n Require all denied\n</FilesMatch>\n";
-if (!$installed || getenv('OJS_PRIVATE_PREVIEW') !== 'false') {
+$publicJournal = $installed && getenv('OJS_PRIVATE_PREVIEW') === 'false';
+if (!$publicJournal) {
     $setupPassword = requiredEnv('OJS_SETUP_PASSWORD');
     if (strlen($setupPassword) < 24) { throw new RuntimeException('Setup protection requires a password of at least 24 characters.'); }
     file_put_contents('/var/ojs/config/setup.htpasswd', 'setup:'.password_hash($setupPassword, PASSWORD_BCRYPT)."\n", LOCK_EX);
@@ -391,11 +392,35 @@ const menu=document.getElementById("nav-toggle");menu.addEventListener("click",(
 </html>
 {/literal}{/if}
 FRONSTELLAR_HOME;
+    if ($publicJournal) {
+        $fronstellarHome = str_replace('<meta name="robots" content="noindex,nofollow">', '', $fronstellarHome);
+    }
     $journalHome = '{* Fronstellar branded homepage *}' . "\n"
         . '{if $currentJournal->getPath() == "fs"}' . "\n" . $fronstellarHome . "\n"
         . '{else}' . "\n" . $journalHome . "\n" . '{/if}' . "\n";
     if (file_put_contents($journalHomePath, $journalHome, LOCK_EX) !== strlen($journalHome)) {
         throw new RuntimeException('Cannot save the Fronstellar homepage template.');
+    }
+}
+
+
+if ($publicJournal) {
+    $sitemap = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+        . "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n";
+    foreach (['en', 'id'] as $locale) {
+        foreach (['index', 'about', 'about/submissions', 'editorial-policies', 'issue/archive'] as $page) {
+            $location = htmlspecialchars($url . '/index.php/fs/' . $locale . '/' . $page, ENT_XML1, 'UTF-8');
+            $sitemap .= "  <url><loc>" . $location . "</loc></url>\n";
+        }
+    }
+    $sitemap .= "</urlset>\n";
+    foreach ([
+        '/var/www/html/sitemap.xml' => $sitemap,
+        '/var/www/html/robots.txt' => "User-agent: *\nAllow: /\nSitemap: " . $url . "/sitemap.xml\n",
+    ] as $path => $contents) {
+        if (file_put_contents($path, $contents, LOCK_EX) !== strlen($contents) || !chmod($path, 0644)) {
+            throw new RuntimeException('Cannot write journal search discovery files.');
+        }
     }
 }
 
