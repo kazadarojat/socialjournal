@@ -405,6 +405,18 @@ FRONSTELLAR_HOME;
 
 
 if ($publicJournal) {
+    $verificationFile = getenv('OJS_GOOGLE_VERIFICATION_FILE');
+    if ($verificationFile !== false && $verificationFile !== '') {
+        if (!preg_match('/\Agoogle[a-f0-9]{16}\.html\z/', $verificationFile)) {
+            throw new RuntimeException('Invalid Google verification filename.');
+        }
+        $verificationPath = '/var/www/html/' . $verificationFile;
+        $verificationContents = 'google-site-verification: ' . $verificationFile;
+        if (file_put_contents($verificationPath, $verificationContents, LOCK_EX) !== strlen($verificationContents)
+            || !chmod($verificationPath, 0644)) {
+            throw new RuntimeException('Cannot write Google Search Console verification file.');
+        }
+    }
     $sitemap = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
         . "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n";
     foreach (['en', 'id'] as $locale) {
